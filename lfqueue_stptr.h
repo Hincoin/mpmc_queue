@@ -272,6 +272,30 @@ namespace hin
 
 		}
 
+		void debug()
+		{
+			std::cout << "##########LF QUEUE INTERNALS##########\n";
+			int width = 200;
+			int item_count = 0;
+			for(int i = 0; i < num_queues; ++i)
+			{
+						std::cout.width(width);
+						std::cout << "#\tQueue " << i << " contents:\n" << std::right << "#\n";
+						auto queue_guard = data_[i].load(std::memory_order_relaxed);
+						auto queue = queue_guard.queue();
+						item_count += queue.size();
+						while(!queue.empty())
+						{
+							std::cout.width(width);
+							std::cout << "#\t" << queue.front() << std::right << "#\n";
+							queue.pop();
+						}
+						std::cout << '\n';
+			}
+			std::cout << "\n\n" << "queue contains: " << item_count << " items\n";
+			
+
+		}
 
 		~lf_queue()
 		{
