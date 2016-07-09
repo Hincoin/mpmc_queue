@@ -6,7 +6,7 @@
 #include <atomic>
 #include <thread>
 #include <type_traits>
-
+#include <x86intrin.h>
 namespace hin
 {
 
@@ -18,7 +18,7 @@ namespace hin
 		template<typename Ptr, int N> struct queue_entry;
 
 		static constexpr int alignment  = 64; // cacheline alignment, 
-		static constexpr int num_queues = 32;
+		static constexpr int num_queues = 8;
 		static constexpr int queue_mask = num_queues - 1;
 
 		using underlying_type = std::queue<T>;
@@ -118,9 +118,10 @@ namespace hin
 		unsigned int get_index()
 		{	
 
-			static thread_local unsigned int cpuid = sched_getcpu() * 4 ;
+//			static thread_local unsigned int multiplier = 4;//num_queues / std::max(1u,std::thread::hardware_concurrency());
+			static thread_local unsigned int cpuid = sched_getcpu() ;
 			static thread_local int countdown = 500;
-			static thread_local int 		 local_offset = thread_offset_.fetch_add(1, std::memory_order_relaxed) & 3;
+			static thread_local int local_offset = thread_offset_.fetch_add(1, std::memory_order_relaxed);//(multiplier - 1);
 			
 
 			if(countdown-- > 0)
@@ -128,7 +129,7 @@ namespace hin
 
 			countdown = 500;
 			__rdtscp(&cpuid);
-			cpuid *= 4;
+			//cpuid *= 2;
 			return cpuid + local_offset;
 			
 		}
@@ -202,6 +203,8 @@ namespace hin
 		template<typename U>
 		bool enqueue(U&& arg)
 		{
+			static_assert(std::is_constructible<T, U&&>::value, 
+				"Cannot construct value type from argument");
 			auto queue_guard =  acquire_queue();
 			if(! queue_guard.ptr_)
 				return false;
@@ -215,6 +218,7 @@ namespace hin
 		template<typename It>
 		bool enqueue_bulk(It iter, std::size_t count)
 		{
+
 			auto queue_guard =  acquire_queue(); // atmically acquire queue
 			if(! queue_guard.ptr_)
 				return false;
@@ -281,14 +285,17 @@ namespace hin
 			{
 						std::cout.width(width);
 						std::cout << "#\tQueue " << i << " contents:\n" << std::right << "#\n";
-						auto queue_guard = data_[i].load(std::memory_order_relaxed);
-						auto queue = queue_guard.queue();
-						item_count += queue.size();
-						while(!queue.empty())
+						auto queue_ptr = data_[i].load(std::memory_order_relaxed);
+						if(!queue_ptr)
+						{
+							continue;
+						}
+						item_count += queue_ptr->size();
+						while(!queue_ptr->empty())
 						{
 							std::cout.width(width);
-							std::cout << "#\t" << queue.front() << std::right << "#\n";
-							queue.pop();
+							std::cout << "#\t" << queue_ptr->front() << std::right << "#\n";
+							queue_ptr->pop();
 						}
 						std::cout << '\n';
 			}
