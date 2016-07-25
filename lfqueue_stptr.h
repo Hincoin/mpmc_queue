@@ -6,6 +6,7 @@
 #include <atomic>
 #include <thread>
 #include <type_traits>
+#include <memory>
 #include <x86intrin.h>
 namespace hin
 {
@@ -18,13 +19,11 @@ namespace hin
 		template<typename Ptr, int N> struct queue_entry;
 
 		static constexpr int alignment  = 64; // cacheline alignment, 
-		static constexpr int num_queues = 8;
-		static constexpr int queue_mask = num_queues - 1;
-
+		
 		using underlying_type = std::queue<T>;
 		using pointer  		  = underlying_type*;
-		using type 			  = queue_entry<pointer, alignment>;
-		using container 	  = std::array<type, num_queues>;
+		using entry_type 	  = queue_entry<pointer, alignment>;
+		using container 	  = std::unique_ptr<entry_type[]>;
 
 		template<typename Ptr, int N>
 	    struct alignas(alignment) queue_entry
@@ -56,13 +55,20 @@ namespace hin
 
 		};
 
+		int num_queues;
+		int queue_mask;
 		container data_;
 		std::atomic<int> thread_offset_;
+		
+
 
 	public:
 
 
-		lf_queue() : thread_offset_(0) 
+		lf_queue() : num_queues(std::thread::hardware_concurrency()), 
+					 queue_mask(num_queues - 1), 
+					 data_(new entry_type[num_queues]),
+					 thread_offset_(0) 
 		{
 			for(int i = 0 ; i < num_queues; ++i)
 			 {
@@ -135,7 +141,8 @@ namespace hin
 		}
 
 	
-		/* dequeue-ing threads need to acquire queues with data in them (empty() == false) to avoid
+		/* 
+			dequeue-ing threads need to acquire queues with data in them (empty() == false) to avoid
 		   several compare_exchange_strong operations in an effort to find a properly filled queue.
 		   To aid this process, the destructor of queue_holder ( which is used as an RAII wrapper)
 		   sets a boolean flag within its respective index of data_ corresponding to the value
@@ -306,9 +313,9 @@ namespace hin
 
 		~lf_queue()
 		{
-			for(auto& st_queue : data_)
+			for(int i = 0; i < num_queues; ++i)
 			{
-				delete st_queue.load(std::memory_order_relaxed);
+				delete data_[i].load(std::memory_order_relaxed);
 			}
 		}
 
