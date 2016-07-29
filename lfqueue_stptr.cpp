@@ -68,7 +68,7 @@ std::size_t adjustForThreads(std::size_t suggestedOps, int nthreads)
 void heavy_concurrent(int nthreads)
 {
 		using SimpleThread = std::thread;
-		using TQueue  = lf_queue<int>;
+		using TQueue  = hin::lf_queue<int>;
 
 		TQueue q;
 		std::vector<SimpleThread> threads(nthreads);
@@ -142,7 +142,7 @@ void custom_bm()
 										"Kush! Dr. Dre && Snoop Dogg exclusive, SSO defeat, making this string longer",
 										 "I am on this plane, with just over an hour left of flight time. Please defeat the SSO!"} };
 
-	lf_queue<std::string> lfqueue;
+	hin::lf_queue<std::string> lfqueue;
 	
 
 
